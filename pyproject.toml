@@ -1,0 +1,27 @@
+[project]
+name = "cw"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Subeen Regmi",email = "subeenregmi123@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas (>=3.0.1,<4.0.0)",
+    "numpy (>=2.4.2,<3.0.0)",
+    "opencv-python (>=4.13.0.92,<5.0.0.0)",
+    "opencv-contrib-python (>=4.13.0.92,<5.0.0.0)",
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[tool.poetry]
+package-mode = false
