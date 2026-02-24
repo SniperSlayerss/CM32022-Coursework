@@ -20,8 +20,10 @@ class Model(nn.Module):
             nn.BatchNorm1d(576),
             nn.Linear(576, 1024),
             nn.ReLU(),
+            nn.Dropout(0.4),
             nn.Linear(1024, 512),
             nn.ReLU(),
+            nn.Dropout(0.3),
             nn.Linear(512, num_classes),
         )
 
@@ -35,7 +37,7 @@ class Model(nn.Module):
 def train_model(
     model: Model, train_dataloader: DataLoader, test_dataloader: DataLoader, device: str
 ):
-    num_epochs = 100
+    num_epochs = 200
 
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     # criterion = nn.CrossEntropyLoss()
@@ -51,7 +53,8 @@ def train_model(
     #     nesterov=True,
     # )
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=30, T_mult=2)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(
     #     optimizer, max_lr=[1e-3, 1e-2],
     #     steps_per_epoch=len(train_dataloader),
@@ -86,10 +89,16 @@ def train_model(
 
         if test_acc > best_acc:
             best_acc = test_acc
-            torch.save(model.state_dict(), f"{os.path.dirname(__file__)}/models/best_model1.pth")
+            torch.save(
+                model.state_dict(),
+                f"{os.path.dirname(__file__)}/models/best_model1.pth",
+            )
 
         scheduler.step()
-        print(f"Epoch {epoch+1}: Loss={total_loss/len(train_dataloader):.4f}, Train Acc={train_acc:.2f}%, Test Acc={100.0 * test_acc:.2f}%")
+        print(
+            f"Epoch {epoch + 1}: Loss={total_loss / len(train_dataloader):.4f}, Train Acc={train_acc:.2f}%, Test Acc={100.0 * test_acc:.2f}%"
+        )
+
 
 def evaluate_model(model: Model, test_dataloader: DataLoader, device: str):
     model.eval()
