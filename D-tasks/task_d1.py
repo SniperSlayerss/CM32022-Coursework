@@ -53,8 +53,8 @@ def train_model(
     #     nesterov=True,
     # )
 
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=30, T_mult=2)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=30, T_mult=2)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(
     #     optimizer, max_lr=[1e-3, 1e-2],
     #     steps_per_epoch=len(train_dataloader),
