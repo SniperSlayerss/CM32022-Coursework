@@ -1,4 +1,3 @@
-# TODO: Implement the dataset class extending torch.utils.data.Dataset
 import pickle
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -6,22 +5,23 @@ import numpy as np
 
 import os
 import dataset
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 
-# TODO: Calculate for given dataset, check if this makes sense to do with new test data
-# TODO: Use full CIFAR test set to check if it generalises
-# CIFAR_100_MEAN = np.array([0.5073625, 0.4866923, 0.44109058], dtype = np.float32)
-# CIFAR_100_STD = np.array([0.26748824, 0.25659314, 0.2763088], dtype = np.float32)
-# TODO: Potentially handle using batch norm instead?
-# TODO: Download dataset?
+# Calculated only on training set "/data/train.pkl"
+CIFAR_100_MEAN = np.array(
+    [0.5052151083946228, 0.4850522577762604, 0.4412228465080261], dtype=np.float32
+)
+CIFAR_100_STD = np.array(
+    [0.26796528697013855, 0.25680774450302124, 0.27619215846061707], dtype=np.float32
+)
+
 
 # https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html
 class CIFAR100(Dataset):
-    def __init__(self, root, train=True, transform=None):
+    def __init__(self, root: str, train: bool):
         self.root = root
         self.train = train
-        self.transform = transform
 
         path = f"{root}/train.pkl"
         if not train:
@@ -32,30 +32,66 @@ class CIFAR100(Dataset):
 
         # TODO: Make sure the b is needed
         self.data = data[b"data"]
-        self.fine_labels = data[b"fine_labels"]
-        self.coarse_labels = data[b"coarse_labels"]
+        self.fine_labels = torch.tensor(data[b"fine_labels"], dtype=torch.long)
+        self.coarse_labels = torch.tensor(data[b"coarse_labels"], dtype=torch.long)
 
-        self.data = self.data.reshape(-1, 3, 32, 32).astype(np.float32)
+        # self.data = torch.tensor(
+        #     self.data.reshape(-1, 3, 32, 32).astype(np.float32) / 255.0,
+        #     dtype=torch.float32,
+        # )
 
-        # self.mean = CIFAR_100_MEAN.reshape(3, 1, 1)
-        # self.std = CIFAR_100_STD.reshape(3, 1, 1)
+        self.data = torch.tensor(
+            (
+                self.data.reshape(-1, 3, 32, 32).astype(np.float32) / 255.0
+                - CIFAR_100_MEAN.reshape(1, 3, 1, 1)
+            )
+            / CIFAR_100_STD.reshape(1, 3, 1, 1),
+            dtype=torch.float32,
+        )
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        img = self.data[idx] / 255.0
+        img = self.data[idx]
+        # img = self.data[idx]
 
-        # img = (img - self.mean) / self.std
-        img = torch.tensor(img, dtype=torch.float32)
+        if self.train:
+            # Random horizontal flip
+            if torch.rand(1).item() > 0.5:
+                img = torch.flip(img, dims=[2])
 
-        if self.transform:
-            img = self.transform(img)
+            # Random crop with padding
+            pad = 4
+            img = torch.nn.functional.pad(img, (pad, pad, pad, pad), mode="reflect")
+            i = torch.randint(0, 2 * pad, (1,)).item()
+            j = torch.randint(0, 2 * pad, (1,)).item()
+            img = img[:, i : i + 32, j : j + 32]
 
-        return img, {
-            "fine": self.fine_labels[idx],
-            "coarse": self.coarse_labels[idx]
-        }
+            # Random vertical flip (less common but helps)
+            if torch.rand(1).item() > 0.5:
+                img = torch.flip(img, dims=[1])
+
+            if torch.rand(1).item() > 0.5:
+                brightness = 1 + (torch.rand(1).item() * 0.4 - 0.2)
+                img = img * brightness
+
+        return img, {"fine": self.fine_labels[idx], "coarse": self.coarse_labels[idx]}
+
+
+def get_training_stats():
+    with open(f"{os.path.dirname(__file__)}/data/train.pkl", "rb") as f:
+        data = pickle.load(f, encoding="bytes")
+
+    imgs = data[b"data"].reshape(-1, 3, 32, 32).astype(np.float32) / 255.0
+
+    mean = imgs.mean(axis=(0, 2, 3))
+    std = imgs.std(axis=(0, 2, 3))
+    print(len(imgs))
+
+    print(f"CIFAR_100_MEAN = np.array({mean.tolist()}, dtype=np.float32)")
+    print(f"CIFAR_100_STD = np.array({std.tolist()}, dtype=np.float32)")
+
 
 class Data(NamedTuple):
     train_set: Dataset
@@ -67,16 +103,22 @@ class Data(NamedTuple):
 def init_dataloaders() -> Data:
     # Prepare data
     train_set = dataset.CIFAR100(
-        f"{os.path.dirname(__file__)}/data", train=True
+        f"{os.path.dirname(__file__)}/data",
+        train=True,
     )
-    test_set = dataset.CIFAR100(
-        f"{os.path.dirname(__file__)}/data", train=False
+    test_set = dataset.CIFAR100(f"{os.path.dirname(__file__)}/data", train=False)
+
+    train_dataloader = DataLoader(
+        train_set,
+        batch_size=32,
+        shuffle=True,
+        num_workers=5,
+        pin_memory=True,
     )
 
-    train_dataloader = torch.utils.data.DataLoader(
-        train_set, batch_size=32, shuffle=True
+    test_dataloader = DataLoader(
+        test_set, batch_size=32, shuffle=False, num_workers=5, pin_memory=True
     )
-    test_dataloader = torch.utils.data.DataLoader(test_set, batch_size=32, shuffle=False)
 
     return Data(
         train_set=train_set,
@@ -85,3 +127,6 @@ def init_dataloaders() -> Data:
         test_dataloader=test_dataloader,
     )
 
+
+if __name__ == "__main__":
+    get_training_stats()
