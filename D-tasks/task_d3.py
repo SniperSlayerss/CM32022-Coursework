@@ -83,7 +83,7 @@ def train_model(
             best_acc = avg_acc
             torch.save(
                 model.state_dict(),
-                f"{os.path.dirname(__file__)}/models/best_model3.pth",
+                f"{os.path.dirname(__file__)}/models/d3.pth",
             )
         scheduler.step()
         print(
@@ -148,7 +148,7 @@ def prepare_test():
     #  The output is the prediction of your classifier, providing two scores for both fine and coarse classes,
     #  for each image in input
 
-    model = None  # TODO change this to your model
+    model = Model(new_backbone()).to("cuda" if torch.cuda.is_available() else "cpu")
 
     # do not edit from here downwards
     weights_path = "models/d3.pth"
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     train_model(model, data.train_dataloader, data.test_dataloader, device)
     model.load_state_dict(
         torch.load(
-            f"{os.path.dirname(__file__)}/models/best_model3.pth",
+            f"{os.path.dirname(__file__)}/models/d3.pth",
             weights_only=True,
             map_location=device,
         )
