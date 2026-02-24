@@ -91,7 +91,7 @@ def train_model(
             best_acc = test_acc
             torch.save(
                 model.state_dict(),
-                f"{os.path.dirname(__file__)}/models/best_model1.pth",
+                f"{os.path.dirname(__file__)}/models/best_model2.pth",
             )
 
         scheduler.step()
@@ -103,7 +103,7 @@ def train_model(
 def evaluate_model(model: Model, test_dataloader: DataLoader, device: str):
     model.eval()
     test_loss = 0
-    number_of_correct = 0
+    total_correct = 0
     with torch.no_grad():
         for data, target in test_dataloader:
             data, target = data.to(device), target["coarse"].to(device)
@@ -112,10 +112,10 @@ def evaluate_model(model: Model, test_dataloader: DataLoader, device: str):
                 output, target, reduction="sum"
             ).item()
             pred = output.argmax(dim=1, keepdim=True)
-            number_of_correct += pred.eq(target.view_as(pred)).sum().item()
+            total_correct += pred.eq(target.view_as(pred)).sum().item()
         test_loss /= len(test_dataloader.dataset)
 
-    acc = number_of_correct / len(test_dataloader.dataset)
+    acc = total_correct / len(test_dataloader.dataset)
     return acc, test_loss
 
 
@@ -157,7 +157,7 @@ if __name__ == "__main__":
     train_model(model, data.train_dataloader, data.test_dataloader, device)
     model.load_state_dict(
         torch.load(
-            f"{os.path.dirname(__file__)}/models/best_model1.pth",
+            f"{os.path.dirname(__file__)}/models/best_model2.pth",
             weights_only=True,
             map_location=device,
         )

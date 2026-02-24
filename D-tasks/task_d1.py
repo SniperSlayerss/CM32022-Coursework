@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from backbone import new_backbone
 
 from dataset import init_dataloaders
@@ -103,7 +103,7 @@ def train_model(
 def evaluate_model(model: Model, test_dataloader: DataLoader, device: str):
     model.eval()
     test_loss = 0
-    number_of_correct = 0
+    total_correct = 0
     with torch.no_grad():
         for data, target in test_dataloader:
             data, target = data.to(device), target["fine"].to(device)
@@ -112,10 +112,10 @@ def evaluate_model(model: Model, test_dataloader: DataLoader, device: str):
                 output, target, reduction="sum"
             ).item()
             pred = output.argmax(dim=1, keepdim=True)
-            number_of_correct += pred.eq(target.view_as(pred)).sum().item()
+            total_correct += pred.eq(target.view_as(pred)).sum().item()
         test_loss /= len(test_dataloader.dataset)
 
-    acc = number_of_correct / len(test_dataloader.dataset)
+    acc = total_correct / len(test_dataloader.dataset)
     return acc, test_loss
 
 
