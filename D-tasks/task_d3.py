@@ -1,4 +1,3 @@
-from audioop import avg
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
