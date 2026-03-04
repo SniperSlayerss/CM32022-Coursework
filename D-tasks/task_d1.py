@@ -89,9 +89,13 @@ def train_model(
 
         if test_acc > best_acc:
             best_acc = test_acc
+
+            dir_path = f"{os.path.dirname(__file__)}/models"
+            if not os.path.exists(dir_path):
+                os.makedirs(dir_path)
             torch.save(
                 model.state_dict(),
-                f"{os.path.dirname(__file__)}/models/d1.pth",
+                f"{dir_path}/d1.pth",
             )
 
         scheduler.step()
@@ -127,7 +131,9 @@ def prepare_test():
     #  and 100 is the number of classes. The output of your model must be the prediction of your classifier,
     #  providing a score for each class, for each image in input
 
-    model = Model(new_backbone(), 100).to("cuda" if torch.cuda.is_available() else "cpu")
+    model = Model(new_backbone(), 100).to(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
 
     # do not edit from here downwards
     weights_path = "models/d1.pth"

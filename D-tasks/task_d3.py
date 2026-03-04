@@ -80,9 +80,13 @@ def train_model(
         avg_acc = (test_fine_acc + test_coarse_acc) / 2
         if avg_acc > best_acc:
             best_acc = avg_acc
+
+            dir_path = f"{os.path.dirname(__file__)}/models"
+            if not os.path.exists(dir_path):
+                os.makedirs(dir_path)
             torch.save(
                 model.state_dict(),
-                f"{os.path.dirname(__file__)}/models/d3.pth",
+                f"{dir_path}/d3.pth",
             )
         scheduler.step()
         print(

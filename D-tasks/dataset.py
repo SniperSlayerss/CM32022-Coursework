@@ -100,7 +100,7 @@ class Data(NamedTuple):
     test_dataloader: DataLoader
 
 
-def init_dataloaders() -> Data:
+def init_dataloaders(batch_size=32) -> Data:
     # Prepare data
     train_set = dataset.CIFAR100(
         f"{os.path.dirname(__file__)}/data",
@@ -110,14 +110,14 @@ def init_dataloaders() -> Data:
 
     train_dataloader = DataLoader(
         train_set,
-        batch_size=32,
+        batch_size=batch_size,
         shuffle=True,
         num_workers=5,
         pin_memory=True,
     )
 
     test_dataloader = DataLoader(
-        test_set, batch_size=32, shuffle=False, num_workers=5, pin_memory=True
+        test_set, batch_size=batch_size, shuffle=False, num_workers=5, pin_memory=True
     )
 
     return Data(

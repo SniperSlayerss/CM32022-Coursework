@@ -89,9 +89,13 @@ def train_model(
 
         if test_acc > best_acc:
             best_acc = test_acc
+
+            dir_path = f"{os.path.dirname(__file__)}/models"
+            if not os.path.exists(dir_path):
+                  os.makedirs(dir_path)
             torch.save(
                 model.state_dict(),
-                f"{os.path.dirname(__file__)}/models/d2.pth",
+                f"{dir_path}/d2.pth",
             )
 
         scheduler.step()
