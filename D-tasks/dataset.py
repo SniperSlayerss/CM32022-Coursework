@@ -57,24 +57,29 @@ class CIFAR100(Dataset):
         # img = self.data[idx]
 
         if self.train:
-            # Random horizontal flip
-            if torch.rand(1).item() > 0.5:
+            # Horizontal flip
+            if torch.rand(1) > 0.5:
                 img = torch.flip(img, dims=[2])
 
-            # Random crop with padding
+            # Random crop
             pad = 4
             img = torch.nn.functional.pad(img, (pad, pad, pad, pad), mode="reflect")
-            i = torch.randint(0, 2 * pad, (1,)).item()
-            j = torch.randint(0, 2 * pad, (1,)).item()
+
+            i = torch.randint(0, 2 * pad + 1, (1,)).item()
+            j = torch.randint(0, 2 * pad + 1, (1,)).item()
             img = img[:, i : i + 32, j : j + 32]
 
-            # Random vertical flip (less common but helps)
-            if torch.rand(1).item() > 0.5:
-                img = torch.flip(img, dims=[1])
+            # Brightness
+            if torch.rand(1) > 0.5:
+                brightness = 1 + (torch.rand(1).item() * 0.3 - 0.15)
+                img = torch.clamp(img * brightness, -3, 3)
 
-            if torch.rand(1).item() > 0.5:
-                brightness = 1 + (torch.rand(1).item() * 0.4 - 0.2)
-                img = img * brightness
+            # Random erasing
+            if torch.rand(1) > 0.75:
+                erase = torch.randint(6, 12, (1,)).item()
+                x = torch.randint(0, 32 - erase, (1,)).item()
+                y = torch.randint(0, 32 - erase, (1,)).item()
+                img[:, x : x + erase, y : y + erase] = 0
 
         return img, {"fine": self.fine_labels[idx], "coarse": self.coarse_labels[idx]}
 
@@ -113,6 +118,7 @@ def init_dataloaders(batch_size=32) -> Data:
         batch_size=batch_size,
         shuffle=True,
         num_workers=5,
+        persistent_workers=True,
         pin_memory=True,
     )
 

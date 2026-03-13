@@ -37,6 +37,12 @@ explicit = true
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
+typeCheckingMode = "basic"
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+
+[tool.ruff]
+line-length = 250
 
 [tool.uv]
 package = false
