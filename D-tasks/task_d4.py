@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from backbone import new_backbone
 from dataset import init_dataloaders
 import os
+import json
 
 
 class TripletModel(nn.Module):
@@ -16,7 +17,7 @@ class TripletModel(nn.Module):
         z = self.backbone(x)
         # Add L2 normalisation to output embeddings
         # Makes Euclidean Distance behave like cosine similarity
-        return torch.nn.functional.normalize(z, p=2, dim=1)
+        return torch.nn.functional.normalize(z, p=2, dim=1, eps=1e-8)
 
 
 # Original triplet loss before adding batch hard mining
@@ -48,9 +49,7 @@ def batch_hard_triplet_loss(embeddings, labels, margin=0.5):
     # Find anchors that have at least one valid positive and one negative
     valid_anchors = pos_mask.any(dim=1) & neg_mask.any(dim=1)
     if not valid_anchors.any():
-        return torch.tensor(
-            0.0, requires_grad=True, device=embeddings.device
-        )  # If none than return 0
+        return torch.tensor(0.0, requires_grad=True, device=embeddings.device)  # If none than return 0
 
     dists = dists[valid_anchors]
     pos_mask = pos_mask[valid_anchors]
@@ -69,10 +68,8 @@ def batch_hard_triplet_loss(embeddings, labels, margin=0.5):
     return loss.mean()
 
 
-def train_model(
-    model, train_dataloader, test_dataloader, device, label_key="fine", margin=0.5
-):
-    num_epochs = 200
+def train_model(model, train_dataloader, test_dataloader, device, label_key="fine", margin=0.5):
+    num_epochs = 50
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-3)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
 
@@ -96,9 +93,7 @@ def train_model(
 
             total_loss += loss.item()
 
-        recall, avg_pos_dist, avg_neg_dist = evaluate_model(
-            model, test_dataloader, device, label_key
-        )
+        recall, avg_pos_dist, avg_neg_dist = evaluate_model(model, test_dataloader, device, label_key)
 
         # Save model when recall@5 improves
         if recall[5] > best_recall:
@@ -110,9 +105,8 @@ def train_model(
             torch.save(model.state_dict(), f"{dir_path}/d4_m={margin}_{label_key}.pth")
 
         scheduler.step()
-        print(
-            f"Epoch {epoch + 1}: Loss={total_loss / len(train_dataloader):.4f}, Recall@5={recall[5]:.4f}"
-        )
+
+        print(f"Epoch {epoch + 1}: Loss={total_loss / len(train_dataloader):.4f}, Recall@5={recall[5]:.4f}, pos_dist={avg_pos_dist:.4f}, neg_dist={avg_neg_dist:.4f}")
 
 
 # Rank images by embedding distance,
@@ -188,9 +182,7 @@ def prepare_test(margin, fine_labels):
 
     print(f"Loading weights from {weights_path}")
     map_location = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.load_state_dict(
-        torch.load(weights_path, weights_only=True, map_location=map_location)
-    )
+    model.load_state_dict(torch.load(weights_path, weights_only=True, map_location=map_location))
 
     return model
 
@@ -201,36 +193,54 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(device)
 
-    data = init_dataloaders(batch_size=128)
-
-    f = new_backbone()
-    # TODO do we train the backbone?
-    # f.eval()
-    # for param in f.parameters():
-    #     param.requires_grad = False
-    model = TripletModel(f).to(device)
+    save_dir = f"{os.path.dirname(__file__)}/D4/results"
+    os.makedirs(save_dir, exist_ok=True)
 
     # def train_model(model, train_dataloader, test_dataloader, device, label_key="fine", margin=0.5
-    label_key = "fine"
-    margin = 0.1
-    train_model(
-        model, data.train_dataloader, data.test_dataloader, device, label_key, margin
-    )
-    model.load_state_dict(
-        torch.load(
-            f"{os.path.dirname(__file__)}/models/d4_m={margin}_{label_key}.pth",
-            weights_only=True,
-            map_location=device,
-        )
-    )
-    # def evaluate_model(model, dataloader, device, label_key="fine"):
-    recall, avg_pos_dist, avg_neg_dist = evaluate_model(
-        model, data.test_dataloader, device, label_key
-    )
+    for margin in [0.3, 0.5, 1.0]:
+        for label_key in ["fine", "coarse"]:
+            batch_size = 64
+            if label_key == "fine":
+                batch_size = 128
 
-    print(
-        "----------- Test set -----------\n",
-        f"Recall: {recall},\n",
-        f"Average pos dist: {avg_pos_dist}\n",
-        f"Average neg dist: {avg_neg_dist}\n",
-    )
+            data = init_dataloaders(batch_size=batch_size)
+            print(f"{label_key} : {margin} : bs {batch_size}")
+            f = new_backbone()
+            model = TripletModel(f).to(device)
+            train_model(model, data.train_dataloader, data.test_dataloader, device, label_key, margin)
+
+            model.load_state_dict(
+                torch.load(
+                    f"{os.path.dirname(__file__)}/models/d4_m={margin}_{label_key}.pth",
+                    weights_only=True,
+                    map_location=device,
+                )
+            )
+            recall, avg_pos_dist, avg_neg_dist = evaluate_model(model, data.test_dataloader, device, label_key)
+
+            print(
+                "----------- Test set -----------\n",
+                f"Recall@5:   {recall[5]:.4f}\n",
+                f"Recall@10:  {recall[10]:.4f}\n",
+                f"Recall@50:  {recall[50]:.4f}\n",
+                f"Recall@100: {recall[100]:.4f}\n",
+                f"Avg pos dist:  {avg_pos_dist:.4f}\n",
+                f"Avg neg dist:  {avg_neg_dist:.4f}\n",
+                f"Pos/neg ratio: {avg_pos_dist / avg_neg_dist:.4f}\n",
+            )
+
+            summary = {
+                "label_key": label_key,
+                "margin": margin,
+                "recall_at_5": recall[5],
+                "recall_at_10": recall[10],
+                "recall_at_50": recall[50],
+                "recall_at_100": recall[100],
+                "avg_pos_dist": avg_pos_dist,
+                "avg_neg_dist": avg_neg_dist,
+                "pos_neg_ratio": avg_pos_dist / avg_neg_dist,
+                "bs": batch_size,
+            }
+
+            with open(f"{save_dir}/m={margin}_{label_key}_summary.json", "w") as f:
+                json.dump(summary, f, indent=2)
