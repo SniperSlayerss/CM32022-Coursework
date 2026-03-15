@@ -1,40 +1,23 @@
 import argparse
 import os
-import random
-from dataclasses import dataclass
-from typing import Sequence
+import time
 
 import cv2 as cv
-import numpy as np
 import pandas as pd
-from cv2.typing import MatLike
-
-# MIN_MATCH_COUNT = 20
-MIN_INLIERS = 6
-MIN_BOUNDING_BOX_AREA = 40
-
-FLANN_INDEX_KDTREE = 1
-
-
-@dataclass
-class SIFTImage:
-    name: str
-    image: MatLike
-    keypoints: Sequence[cv.KeyPoint]
-    descriptor: MatLike
-
-
-@dataclass
-class MatchResults:
-    query_image: SIFTImage
-    train_image: SIFTImage
-    matches: list[cv.DMatch]
+from c3 import (
+    compute_metrics,
+    draw_detections_on_image,
+    find_detections,
+    grid_search,
+    parse_annotation,
+    parse_image,
+    precompute_icons,
+)
 
 
 def test_task_c1(folder_name):
     # assume that this folder name has a file list.txt that contains the annotation.
     task1_data = pd.read_csv(folder_name + "/list.txt")
-    # task1_data = pd.read_csv(folder_name + "/list.txt")
     # Write code to read in each image
     # Write code to process the image
     # Write your code to calculate the angle and obtain the result as a list predAngles
@@ -44,6 +27,8 @@ def test_task_c1(folder_name):
 
 
 def test_task_c2(icon_dir, test_dir):
+    images_folder = os.path.join(test_dir, "images/")
+    annotations_folder = os.path.join(test_dir, "annotations/")
     # assume that test folder name has a directory annotations with a list of csv files
     # load train images from iconDir and for each image from testDir, match it with each class from the iconDir to find the best match
     # For each predicted class, check accuracy with the annotations
@@ -53,151 +38,69 @@ def test_task_c2(icon_dir, test_dir):
     return acc, tpr, fpr, fnr
 
 
-def parse_image(folder_name, file_name) -> SIFTImage:
-    image = cv.imread(folder_name + file_name)
-    if image is None:
-        print("image is none")
-        exit(1)
-
-    # image = cv.resize(image, None, fx=2, fy=2, interpolation=cv.INTER_CUBIC)
-
-    sift: cv.SIFT = cv.SIFT_create(
-        nfeatures=2000,
-    )
-
-    kp, des = sift.detectAndCompute(image, None)
-
-    return SIFTImage(file_name, image, kp, des)
-
-
-def precompute_icons(icon_folder_name) -> list[SIFTImage]:
-    data = []
-
-    files = os.listdir(icon_folder_name)
-    for icon in files:
-        data.append(parse_image(icon_folder_name, icon))
-
-    print("Parsed icons!")
-    return data
-
-
 def test_task_c3(icon_folder_name, test_folder_name):
-    # assume that test folder name has a directory annotations with a list of csv files
-    # load train images from iconDir and for each image from testDir, match it with each class from the iconDir to find the best match
-    # For each predicted class, check accuracy with the annotations
-    # Check and calculate the Intersection Over Union (IoU) score
-    # based on the IoU determine accuracy, TruePositives, FalsePositives, FalseNegatives
+    image_dir = f"{test_folder_name}/images/"
+    annotations_dir = f"{test_folder_name}annotations/"
 
-    # img = cv.imread(icon_dir + "001-lighthouse.png")
-
+    # Precompute descriptors for all icons
     icon_descriptors = precompute_icons(icon_folder_name)
 
-    img_number = random.randint(1, 20)
+    total_tp, total_fp, total_fn = 0, 0, 0
+    runtimes = []
 
-    test_image = parse_image(test_folder_name, f"test_image_{img_number}.png")
+    # For these images, we draw the matches in an image
+    draw_matches_images = [1, 2]
 
-    print(f"Test Image: {test_image.name}")
-
-    index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
-    search_params = dict(checks=50)
-
-    flann = cv.FlannBasedMatcher(index_params, search_params)
-
-    results: list[MatchResults] = []
-    for icon in icon_descriptors:
-        matches = flann.knnMatch(icon.descriptor, test_image.descriptor, k=2)
-
-        good_matches = []
-        for m, n in matches:
-            if m.distance < 0.75 * n.distance:
-                good_matches.append(m)
-
-        results.append(MatchResults(icon, test_image, good_matches))
-
-    output_image = test_image.image
-
-    results.sort(key=lambda x: len(x.matches), reverse=True)
-
-    results = results[:8]
-
-    for res in results:
-        matches = res.matches
-
-        if len(res.matches) < 4:
-            continue
-
-        print(res.query_image.name, len(res.matches))
-        # if len(res.matches) < MIN_MATCH_COUNT:
-        #    continue
-
-        src_pts = np.float32(
-            [res.query_image.keypoints[m.queryIdx].pt for m in res.matches]
-        ).reshape(-1, 1, 2)
-        dst_pts = np.float32(
-            [res.train_image.keypoints[m.trainIdx].pt for m in res.matches]
-        ).reshape(-1, 1, 2)
-
-        M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 5.0)
-
-        if M is None:
-            continue
-
-        inliers = sum(mask.ravel().tolist())
-
-        if inliers < MIN_INLIERS:
-            continue
-
-        h, w, _ = res.query_image.image.shape
-
-        pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(
-            -1, 1, 2
+    for img_number in range(1, 21):
+        test_image = parse_image(
+            image_dir, f"test_image_{img_number}.png", is_test=True
         )
 
-        dst = cv.perspectiveTransform(pts, M)
+        draw_match = img_number in draw_matches_images
 
-        if cv.contourArea(np.int32(dst)) < MIN_BOUNDING_BOX_AREA:
-            continue
+        start_time = time.perf_counter()
 
-        # draw rotated bounding box
-        cv.polylines(
-            output_image,
-            [np.int32(dst)],
-            True,
-            (0, 255, 0),
-            3,
-            cv.LINE_AA,
+        detections = find_detections(
+            test_image,
+            icon_descriptors,
+            save_matches=draw_match,
+            img_number=img_number,
         )
-        # axis-aligned bbox (for evaluation)
-        xs = dst[:, 0, 0]
-        ys = dst[:, 0, 1]
+        end_time = time.perf_counter()
 
-        left = max(0, int(xs.min()))
-        top = max(0, int(ys.min()))
-        right = min(test_image.image.shape[1], int(xs.max()))
-        bottom = min(test_image.image.shape[0], int(ys.max()))
+        runtimes.append(end_time - start_time)
 
-        # label
-        cv.putText(
-            output_image,
-            res.query_image.name,
-            (left, top - 10),
-            cv.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 0),
-            2,
-            cv.LINE_AA,
+        real_detections = parse_annotation(
+            annotations_dir, f"test_image_{img_number}.csv"
         )
 
-        cv.imwrite("output.jpg", output_image)
+        output_image = draw_detections_on_image(
+            test_image.image,
+            ground_truth_detections=real_detections,
+            predicted_detections=detections,
+        )
 
-    debug = cv.drawKeypoints(
-        test_image.image,
-        test_image.keypoints,
-        None,
-        flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS,
+        cv.imwrite(f"output/output_image_{img_number}.jpg", output_image)
+
+        tp, fp, fn = compute_metrics(real_detections, detections)
+        total_tp += tp
+        total_fp += fp
+        total_fn += fn
+
+        print(f"Parsed {test_image.name}!")
+
+    tpr = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
+    fpr = total_fp / (total_fp + total_tp) if (total_fp + total_tp) > 0 else 0.0
+    acc = (
+        total_tp / (total_tp + total_fp + total_fn)
+        if (total_tp + total_fp + total_fn) > 0
+        else 0.0
     )
 
-    cv.imwrite("kp_debug.jpg", debug)
+    avg_runtime = sum(runtimes) / len(runtimes)
+    print(f"TP: {total_tp}, FP: {total_fp}, FN: {total_fn}")
+    print(f"ACC: {acc:.3f}, TPR: {tpr:.3f}, FPR: {fpr:.3f}")
+    print(f"Avg runtime per image: {avg_runtime:.3f}s")
 
 
 if __name__ == "__main__":
@@ -227,6 +130,22 @@ if __name__ == "__main__":
         type=str,
         required=False,
     )
+    parser.add_argument(
+        "--GridSearch",
+        help="Run grid search over hyperparameters. Provide the Task 3 Dataset folder.",
+        type=str,
+        required=False,
+    )
+    parser.add_argument(
+        "--ransac",
+        help=(
+            "RANSAC implementation to use for Task 3. "
+            "'custom' (default) uses the manual DLT+RANSAC required for graded submission. "
+            "'opencv' uses cv2.findHomography — DEV/DEBUG ONLY, forbidden by the coursework spec."
+        ),
+        choices=["custom", "opencv"],
+        default="custom",
+    )
     args = parser.parse_args()
 
     if args.Task1Dataset is not None:
@@ -243,4 +162,10 @@ if __name__ == "__main__":
         # The Icon dataset directory contains an icon image for each file
         # The Task3 dataset has two directories, an annotation directory that contains the annotation and a png
         # directory with list of images
-        test_task_c3(args.IconDataset, args.Task3Dataset)
+        test_task_c3(
+            args.IconDataset,
+            args.Task3Dataset,
+        )
+
+    if args.IconDataset is not None and args.GridSearch is not None:
+        grid_search(args.IconDataset, args.GridSearch)
