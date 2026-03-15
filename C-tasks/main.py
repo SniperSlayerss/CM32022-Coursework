@@ -136,16 +136,7 @@ if __name__ == "__main__":
         type=str,
         required=False,
     )
-    parser.add_argument(
-        "--ransac",
-        help=(
-            "RANSAC implementation to use for Task 3. "
-            "'custom' (default) uses the manual DLT+RANSAC required for graded submission. "
-            "'opencv' uses cv2.findHomography — DEV/DEBUG ONLY, forbidden by the coursework spec."
-        ),
-        choices=["custom", "opencv"],
-        default="custom",
-    )
+
     args = parser.parse_args()
 
     if args.Task1Dataset is not None:
