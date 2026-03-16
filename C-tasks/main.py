@@ -242,12 +242,15 @@ def test_task_c3(icon_folder_name, test_folder_name):
 
     tpr = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
     fpr = total_fp / (total_fp + total_tp) if (total_fp + total_tp) > 0 else 0.0
+    fnr = total_fn / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
     acc = total_tp / (total_tp + total_fp + total_fn) if (total_tp + total_fp + total_fn) > 0 else 0.0
 
     avg_runtime = sum(runtimes) / len(runtimes)
     print(f"TP: {total_tp}, FP: {total_fp}, FN: {total_fn}")
-    print(f"ACC: {acc:.3f}, TPR: {tpr:.3f}, FPR: {fpr:.3f}")
+    print(f"ACC: {acc:.3f}, TPR: {tpr:.3f}, FPR: {fpr:.3f}, FNR: {fnr:.3f}")
     print(f"Avg runtime per image: {avg_runtime:.3f}s")
+
+    return acc, tpr, fpr, fnr
 
 
 if __name__ == "__main__":
