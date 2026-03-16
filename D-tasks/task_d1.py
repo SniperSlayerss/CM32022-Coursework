@@ -263,7 +263,7 @@ def prepare_test():
 
     # TODO CHANGE TO CORRECT MODEL
     # model = ModelBig(new_backbone(), 100, dropout=[0.5, 0.4]).to("cuda" if torch.cuda.is_available() else "cpu")
-    model = ModelBig(new_backbone(), 100, dropout=[0.5, 0.4])
+    model = ModelNarrow(new_backbone(), 100, dropout=[0.3, 0.2])
 
     # do not edit from here downwards
     weights_path = "models/d1.pth"
@@ -275,7 +275,9 @@ def prepare_test():
 
 
 RUNS = [
-    RunConfig(name="rbest2", model_type="big", dropout=[0.5, 0.4], optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="cosine", label_smoothing=0.1, batch_size=32, note="best"),
+    # RunConfig(name="rbest2", model_type="big", dropout=[0.5, 0.4], optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="cosine", label_smoothing=0.1, batch_size=32, note="best"),
+    RunConfig(name="rbest3", model_type="narrow", dropout=[0.3, 0.2], optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="cosine", label_smoothing=0.2, batch_size=32, note="narrow: 576->256->100"),
+    # RunConfig(name="rbest2", model_type="big", dropout=[0.5, 0.4], optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="cosine", label_smoothing=0.1, batch_size=32, note="best"),
     # Scheduler
     # RunConfig(name="r01_cosine", model_type="big", dropout=[0.2, 0.1], optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="cosine", label_smoothing=0.1, batch_size=32, note="baseline"),
     # RunConfig(name="r02_warm_restarts", model_type="big", dropout=[0.2, 0.1], optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="warm_restarts", label_smoothing=0.1, batch_size=32, note="scheduler: warm restarts"),
