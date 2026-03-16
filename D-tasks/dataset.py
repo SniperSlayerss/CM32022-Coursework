@@ -1,6 +1,7 @@
 import pickle
 import torch
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Sampler
 import numpy as np
 
 import os
@@ -9,12 +10,8 @@ from typing import NamedTuple, Optional
 
 
 # Calculated only on training set "/data/train.pkl"
-CIFAR_100_MEAN = np.array(
-    [0.5052151083946228, 0.4850522577762604, 0.4412228465080261], dtype=np.float32
-)
-CIFAR_100_STD = np.array(
-    [0.26796528697013855, 0.25680774450302124, 0.27619215846061707], dtype=np.float32
-)
+CIFAR_100_MEAN = np.array([0.5052151083946228, 0.4850522577762604, 0.4412228465080261], dtype=np.float32)
+CIFAR_100_STD = np.array([0.26796528697013855, 0.25680774450302124, 0.27619215846061707], dtype=np.float32)
 
 
 # https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html
@@ -30,7 +27,6 @@ class CIFAR100(Dataset):
         with open(path, "rb") as f:
             data = pickle.load(f, encoding="bytes")
 
-        # TODO: Make sure the b is needed
         self.data = data[b"data"]
         self.fine_labels = torch.tensor(data[b"fine_labels"], dtype=torch.long)
         self.coarse_labels = torch.tensor(data[b"coarse_labels"], dtype=torch.long)
@@ -41,11 +37,7 @@ class CIFAR100(Dataset):
         # )
 
         self.data = torch.tensor(
-            (
-                self.data.reshape(-1, 3, 32, 32).astype(np.float32) / 255.0
-                - CIFAR_100_MEAN.reshape(1, 3, 1, 1)
-            )
-            / CIFAR_100_STD.reshape(1, 3, 1, 1),
+            (self.data.reshape(-1, 3, 32, 32).astype(np.float32) / 255.0 - CIFAR_100_MEAN.reshape(1, 3, 1, 1)) / CIFAR_100_STD.reshape(1, 3, 1, 1),
             dtype=torch.float32,
         )
 
@@ -105,7 +97,7 @@ class Data(NamedTuple):
     test_dataloader: DataLoader
 
 
-def init_dataloaders(batch_size=32) -> Data:
+def init_dataloaders(batch_size=32, sampler=None) -> Data:
     # Prepare data
     train_set = dataset.CIFAR100(
         f"{os.path.dirname(__file__)}/data",
@@ -122,9 +114,7 @@ def init_dataloaders(batch_size=32) -> Data:
         pin_memory=True,
     )
 
-    test_dataloader = DataLoader(
-        test_set, batch_size=batch_size, shuffle=False, num_workers=5, pin_memory=True
-    )
+    test_dataloader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=5, pin_memory=True)
 
     return Data(
         train_set=train_set,

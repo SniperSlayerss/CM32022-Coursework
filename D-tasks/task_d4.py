@@ -1,4 +1,3 @@
-from contextlib import contextmanager
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -19,6 +18,22 @@ class TripletModel(nn.Module):
         # Makes Euclidean Distance behave like cosine similarity
         return torch.nn.functional.normalize(z, p=2, dim=1, eps=1e-8)
 
+class TripletProjectionModel(nn.Module):
+    def __init__(self, backbone, use_projection=False, proj_dim=128):
+        super().__init__()
+        self.backbone = backbone
+        self.use_projection = use_projection
+        if use_projection:
+            self.projection = nn.Sequential(
+                nn.Linear(576, proj_dim),
+                nn.ReLU(),
+                nn.Linear(proj_dim, 576)
+            )
+
+    def forward(self, x):
+        z = self.backbone(x)
+        z = self.projection(z)
+        return torch.nn.functional.normalize(z, p=2, dim=1, eps=1e-8)
 
 # Original triplet loss before adding batch hard mining
 # Pushing positives closer and negatives further by at least margin
@@ -29,6 +44,44 @@ def triplet_loss(anchor, positive, negative, margin=0.5):
     loss = torch.clamp(d_pos - d_neg + margin, min=0.0)
     return loss.mean()
 
+def random_triplet_loss(embeddings, labels, margin=0.5):
+    loss = torch.tensor(0.0, requires_grad=True, device=embeddings.device)
+    n = len(embeddings)
+    count = 0
+    for i in range(n):
+        pos_idx = (labels == labels[i]).nonzero(as_tuple=True)[0]
+        neg_idx = (labels != labels[i]).nonzero(as_tuple=True)[0]
+        if len(pos_idx) < 2 or len(neg_idx) < 1:
+            continue
+        p = pos_idx[torch.randint(len(pos_idx), (1,))]
+        nn = neg_idx[torch.randint(len(neg_idx), (1,))]
+        d_pos = torch.nn.functional.pairwise_distance(embeddings[i:i+1], embeddings[p])
+        d_neg = torch.nn.functional.pairwise_distance(embeddings[i:i+1], embeddings[nn])
+        loss = loss + torch.clamp(d_pos - d_neg + margin, min=0.0)
+        count += 1
+    return loss / count if count > 0 else loss
+
+def distance_weighted_loss(embeddings, labels, margin=0.5, cutoff=0.5):
+    dists = torch.cdist(embeddings, embeddings)
+    labels_col = labels.unsqueeze(1)
+    neg_mask = (labels_col != labels_col.T).float()
+
+    # Weight negatives by inverse distance, clipped to avoid trivial negatives
+    weights = 1.0 / (dists + 1e-6)
+    weights = weights * neg_mask
+    weights[dists < cutoff] = 0  # ignore very close negatives
+    weights = weights / (weights.sum(dim=1, keepdim=True) + 1e-6)
+
+    # Sample one negative per anchor using weights
+    neg_idx = torch.multinomial(weights, 1).squeeze(1)
+
+    pos_mask = (labels_col == labels_col.T).float()
+    pos_mask.fill_diagonal_(0)
+    hardest_positive = (dists * pos_mask).max(dim=1)[0]
+
+    d_neg = dists[torch.arange(len(embeddings)), neg_idx]
+    loss = torch.clamp(hardest_positive - d_neg + margin, min=0.0)
+    return loss.mean()
 
 # Trains using the most 'informative' triplets, where the loss is higher
 def batch_hard_triplet_loss(embeddings, labels, margin=0.5):
@@ -68,10 +121,45 @@ def batch_hard_triplet_loss(embeddings, labels, margin=0.5):
     return loss.mean()
 
 
+def batch_semihard_triplet_loss(embeddings, labels, margin=0.5):
+    dists = torch.cdist(embeddings, embeddings)
+    labels = labels.unsqueeze(1)
+    pos_mask = labels == labels.T
+    neg_mask = labels != labels.T
+    diag_mask = torch.eye(len(embeddings), device=embeddings.device).bool()
+    pos_mask[diag_mask] = False
+
+    # For each anchor, get hardest positive distance
+    hardest_positive = (dists * pos_mask).max(dim=1)[0]
+
+    # Semi-hard: negatives further than positive but within margin
+    # i.e. d_pos < d_neg < d_pos + margin
+    semihard_mask = neg_mask & (dists > hardest_positive.unsqueeze(1)) & (dists < hardest_positive.unsqueeze(1) + margin)
+
+    valid_anchors = pos_mask.any(dim=1) & semihard_mask.any(dim=1)
+
+    if not valid_anchors.any():
+        # Fall back to hard mining if no semi-hard negatives found
+        return batch_hard_triplet_loss(embeddings, labels.squeeze(1), margin)
+
+    dists = dists[valid_anchors]
+    pos_mask = pos_mask[valid_anchors]
+    semihard_mask = semihard_mask[valid_anchors]
+
+    hardest_positive = (dists * pos_mask).max(dim=1)[0]
+    # Pick the easiest semi-hard negative (furthest within the semi-hard zone)
+    masked = dists.clone()
+    masked[~semihard_mask] = 0
+    semihard_negative = masked.max(dim=1)[0]
+
+    loss = torch.clamp(hardest_positive - semihard_negative + margin, min=0.0)
+    return loss.mean()
+
+
 def train_model(model, train_dataloader, test_dataloader, device, label_key="fine", margin=0.5):
-    num_epochs = 50
+    num_epochs = 100
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-3)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
 
     best_recall = 0.0
     for epoch in range(num_epochs):
@@ -86,7 +174,10 @@ def train_model(model, train_dataloader, test_dataloader, device, label_key="fin
 
             embeddings = model(x)
 
-            loss = batch_hard_triplet_loss(embeddings, labels, margin)
+            # loss = random_triplet_loss(embeddings, labels, margin)
+            loss = distance_weighted_loss(embeddings, labels, margin)
+            # loss = batch_hard_triplet_loss(embeddings, labels, margin)
+            # loss = batch_semihard_triplet_loss(embeddings, labels, margin)
 
             loss.backward()
             optimizer.step()
@@ -104,7 +195,7 @@ def train_model(model, train_dataloader, test_dataloader, device, label_key="fin
                 os.makedirs(dir_path)
             torch.save(model.state_dict(), f"{dir_path}/d4_m={margin}_{label_key}.pth")
 
-        scheduler.step()
+        # scheduler.step()
 
         print(f"Epoch {epoch + 1}: Loss={total_loss / len(train_dataloader):.4f}, Recall@5={recall[5]:.4f}, pos_dist={avg_pos_dist:.4f}, neg_dist={avg_neg_dist:.4f}")
 
@@ -197,13 +288,15 @@ if __name__ == "__main__":
     os.makedirs(save_dir, exist_ok=True)
 
     # def train_model(model, train_dataloader, test_dataloader, device, label_key="fine", margin=0.5
-    for margin in [0.3, 0.5, 1.0]:
+    # for margin in [0.3, 0.5, 1.0]:
+    for margin in [0.3, 0.5, 1.0, 1.5]:
+        # for label_key in ["fine", "coarse"]:
         for label_key in ["fine", "coarse"]:
             batch_size = 64
             if label_key == "fine":
                 batch_size = 128
 
-            data = init_dataloaders(batch_size=batch_size)
+            data = init_dataloaders(batch_size=batch_size, sampler=None)
             print(f"{label_key} : {margin} : bs {batch_size}")
             f = new_backbone()
             model = TripletModel(f).to(device)
@@ -242,5 +335,5 @@ if __name__ == "__main__":
                 "bs": batch_size,
             }
 
-            with open(f"{save_dir}/m={margin}_{label_key}_summary.json", "w") as f:
-                json.dump(summary, f, indent=2)
+            with open(f"{save_dir}/m={margin}_{label_key}_summary.json", "w") as fp:
+                json.dump(summary, fp, indent=2)

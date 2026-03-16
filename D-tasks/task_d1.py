@@ -168,7 +168,7 @@ def train_model(model, criterion, optimizer, scheduler, config: RunConfig, train
             train_total += y.size(0)
 
         train_acc = 100.0 * train_correct / train_total
-        test_acc, test_loss, top5_acc = evaluate_model(model, test_dataloader, device)
+        test_acc, test_loss, top5_acc, top3_acc = evaluate_model(model, test_dataloader, device)
         avg_loss = total_loss / len(train_dataloader)
         current_lr = optimizer.param_groups[0]["lr"]
 
@@ -194,6 +194,7 @@ def evaluate_model(model: ModelBig | ModelSmall, test_dataloader: DataLoader, de
     test_loss = 0
     total_correct = 0
     top5_correct = 0
+    top3_correct = 0
 
     with torch.no_grad():
         for data, target in test_dataloader:
@@ -204,14 +205,17 @@ def evaluate_model(model: ModelBig | ModelSmall, test_dataloader: DataLoader, de
             pred = output.argmax(dim=1, keepdim=True)
             total_correct += pred.eq(target.view_as(pred)).sum().item()
 
+            top3_pred = output.topk(3, dim=1).indices
+            top3_correct += sum(target[i] in top3_pred[i] for i in range(len(target)))
+
             top5_pred = output.topk(5, dim=1).indices
             top5_correct += sum(target[i] in top5_pred[i] for i in range(len(target)))
 
     n = len(test_dataloader.dataset)
-    return total_correct / n, test_loss / n, top5_correct / n
+    return total_correct / n, test_loss / n, top5_correct / n, top3_correct / n
 
 
-def save_summary(config: RunConfig, train_acc, test_acc, loss_history, lr_history, top5_acc):
+def save_summary(config: RunConfig, train_acc, test_acc, loss_history, lr_history, top5_acc, top3_acc):
     gap_history = [tr - te for tr, te in zip(train_acc, test_acc)]
     best_idx = test_acc.index(max(test_acc))
 
@@ -234,6 +238,7 @@ def save_summary(config: RunConfig, train_acc, test_acc, loss_history, lr_histor
         "final_train_acc": train_acc[-1],
         "final_test_acc": test_acc[-1],
         "final_gap": gap_history[-1],
+        "top3_acc": top3_acc * 100,
         "top5_acc": top5_acc * 100,
         "min_loss": min(loss_history),
     }
@@ -257,7 +262,8 @@ def prepare_test():
     #  providing a score for each class, for each image in input
 
     # TODO CHANGE TO CORRECT MODEL
-    model = ModelBig(new_backbone(), 100, dropout=[0.5, 0.4]).to("cuda" if torch.cuda.is_available() else "cpu")
+    # model = ModelBig(new_backbone(), 100, dropout=[0.5, 0.4]).to("cuda" if torch.cuda.is_available() else "cpu")
+    model = ModelBig(new_backbone(), 100, dropout=[0.5, 0.4])
 
     # do not edit from here downwards
     weights_path = "models/d1.pth"
@@ -269,7 +275,7 @@ def prepare_test():
 
 
 RUNS = [
-    RunConfig(name="rbest", model_type="big", dropout=[0.5, 0.4], optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="cosine", label_smoothing=0.1, batch_size=32, note="best"),
+    RunConfig(name="rbest2", model_type="big", dropout=[0.5, 0.4], optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="cosine", label_smoothing=0.1, batch_size=32, note="best"),
     # Scheduler
     # RunConfig(name="r01_cosine", model_type="big", dropout=[0.2, 0.1], optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="cosine", label_smoothing=0.1, batch_size=32, note="baseline"),
     # RunConfig(name="r02_warm_restarts", model_type="big", dropout=[0.2, 0.1], optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="warm_restarts", label_smoothing=0.1, batch_size=32, note="scheduler: warm restarts"),
@@ -325,11 +331,11 @@ if __name__ == "__main__":
         )
 
         model.load_state_dict(torch.load(f"{os.path.dirname(__file__)}/models/d1.pth", weights_only=True, map_location=device))
-        _, _, top5_acc = evaluate_model(model, data.test_dataloader, device)
+        _, _, top5_acc, top3_acc = evaluate_model(model, data.test_dataloader, device)
 
         dir = "D1"
         plot.plot_accuracy(train_acc, test_acc, config.name, dir)
         plot.plot_loss(loss_history, config.name, dir)
         plot.plot_confusion_matrix(model, data.test_dataloader, device, config.name, "fine", dir)
 
-        save_summary(config, train_acc, test_acc, loss_history, lr_history, top5_acc)
+        save_summary(config, train_acc, test_acc, loss_history, lr_history, top5_acc, top3_acc)

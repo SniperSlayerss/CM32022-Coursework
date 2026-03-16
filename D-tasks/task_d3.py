@@ -228,7 +228,7 @@ def evaluate_model(model, test_dataloader: DataLoader, device: str):
     return correct_fine / n, correct_coarse / n, correct_both / n, test_loss / n
 
 
-def save_summary(config: RunConfig, results: tuple, top5_fine: float, top3_coarse: float):
+def save_summary(config: RunConfig, results: tuple, top5_fine: float, top5_coarse: float, top3_fine: float, top3_coarse: float):
     os.makedirs("results", exist_ok=True)
     train_fine, train_coarse, train_both, test_fine, test_coarse, test_both, loss_history, lr_history = results
 
@@ -264,6 +264,8 @@ def save_summary(config: RunConfig, results: tuple, top5_fine: float, top3_coars
         "final_fine_acc": test_fine[-1],
         "final_coarse_acc": test_coarse[-1],
         "top5_fine_acc": top5_fine * 100,
+        "top3_fine_acc": top3_fine * 100,
+        "top5_coarse_acc": top5_coarse * 100,
         "top3_coarse_acc": top3_coarse * 100,
     }
 
@@ -278,30 +280,30 @@ def save_summary(config: RunConfig, results: tuple, top5_fine: float, top3_coars
     print(f"  Top-5 fine      : {top5_fine * 100:.2f}%")
 
 
-def evaluate_top5_fine(model, test_dataloader: DataLoader, device: str):
+def evaluate_topN_fine(model, test_dataloader: DataLoader, device: str, n):
     model.eval()
-    top5_correct = 0
+    topn_correct = 0
     with torch.no_grad():
         for data, target in test_dataloader:
             data = data.to(device)
             y_fine = target["fine"].to(device)
             pred_fine, _ = model(data)
-            top5_pred = pred_fine.topk(5, dim=1).indices
-            top5_correct += sum(y_fine[i] in top5_pred[i] for i in range(len(y_fine)))
-    return top5_correct / len(test_dataloader.dataset)
+            topn_pred = pred_fine.topk(n, dim=1).indices
+            topn_correct += sum(y_fine[i] in topn_pred[i] for i in range(len(y_fine)))
+    return topn_correct / len(test_dataloader.dataset)
 
 
-def evaluate_top3_coarse(model, test_dataloader: DataLoader, device: str):
+def evaluate_topN_coarse(model, test_dataloader: DataLoader, device: str, n):
     model.eval()
-    top3_correct = 0
+    topn_correct = 0
     with torch.no_grad():
         for data, target in test_dataloader:
             data = data.to(device)
             y_coarse = target["coarse"].to(device)
             _, pred_coarse = model(data)
-            top3_pred = pred_coarse.topk(3, dim=1).indices
-            top3_correct += sum(y_coarse[i] in top3_pred[i] for i in range(len(y_coarse)))
-    return top3_correct / len(test_dataloader.dataset)
+            topn_pred = pred_coarse.topk(n, dim=1).indices
+            topn_correct += sum(y_coarse[i] in topn_pred[i] for i in range(len(y_coarse)))
+    return topn_correct / len(test_dataloader.dataset)
 
 
 # TODO save your best model and store it at './models/d3.pth'
@@ -312,7 +314,8 @@ def prepare_test():
     #  The output is the prediction of your classifier, providing two scores for both fine and coarse classes,
     #  for each image in input
 
-    model = ModelSeparate(new_backbone(), dropout=0.4).to("cuda" if torch.cuda.is_available() else "cpu")
+    # model = ModelSeparate(new_backbone(), dropout=0.4).to("cuda" if torch.cuda.is_available() else "cpu")
+    model = ModelSeparate(new_backbone(), dropout=0.4)
 
     # do not edit from here downwards
     weights_path = "models/d3.pth"
@@ -324,7 +327,7 @@ def prepare_test():
 
 
 RUNS = [
-    RunConfig(name="rbest", model_type="separate", dropout=0.4, optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="cosine", label_smoothing=0.2, fine_weight=1.0, coarse_weight=1.0, note="best"),
+    RunConfig(name="rbest2", model_type="separate", dropout=0.4, optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="cosine", label_smoothing=0.2, fine_weight=1.0, coarse_weight=1.0, note="best"),
     # Scheduler
     # RunConfig(name="r01_cosine", model_type="shared", dropout=0.3, optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="cosine", label_smoothing=0.1, fine_weight=1.0, coarse_weight=1.0, note="baseline"),
     # RunConfig(name="r02_warm_restarts", model_type="shared", dropout=0.3, optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="warm_restarts", label_smoothing=0.1, fine_weight=1.0, coarse_weight=1.0, note="scheduler: warm restarts"),
@@ -379,8 +382,10 @@ if __name__ == "__main__":
         )
 
         model.load_state_dict(torch.load(f"{os.path.dirname(__file__)}/models/d3.pth", weights_only=True, map_location=device))
-        top5_fine = evaluate_top5_fine(model, data.test_dataloader, device)
-        top3_coarse = evaluate_top3_coarse(model, data.test_dataloader, device)
+        top5_fine = evaluate_topN_fine(model, data.test_dataloader, device, 5)
+        top3_fine = evaluate_topN_fine(model, data.test_dataloader, device, 3)
+        top5_coarse = evaluate_topN_coarse(model, data.test_dataloader, device, 5)
+        top3_coarse = evaluate_topN_coarse(model, data.test_dataloader, device, 3)
 
         dir = "D3"
         train_fine, train_coarse, train_both, test_fine, test_coarse, test_both, loss_h, _ = results
@@ -389,4 +394,4 @@ if __name__ == "__main__":
         plot.plot_loss(loss_h, config.name, dir)
         # plot.plot_confusion_matrix(model, data.test_dataloader, device, config.name, "fine", dir)
 
-        save_summary(config, results, top5_fine, top3_coarse)
+        save_summary(config, results, top5_fine, top5_coarse, top3_fine, top3_coarse)
