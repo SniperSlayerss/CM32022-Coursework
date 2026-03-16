@@ -4,11 +4,12 @@ Repository is managed via `uv`, dependencies are listed in `pyproject.toml` and 
 
 ## C Tasks
 
-> [!note] Requires `opencv-python`
 
 These commands assume you are inside the `C-tasks` directory
 
 > All output images will be in `C-tasks/output/`
+
+>  Requires `opencv-python`
 
 ### Task C3
 ```sh
@@ -50,7 +51,9 @@ make d5
 ```
 
 ### Task D6
-> [!note] Requires `scikit-learn`
+
+>  Requires `scikit-learn`
+
 ```sh
 make d6
 ```
