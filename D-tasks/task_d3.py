@@ -358,7 +358,7 @@ RUNS = [
 
 
 if __name__ == "__main__":
-    import plot
+    # import plot
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device: {device}")
@@ -389,9 +389,9 @@ if __name__ == "__main__":
 
         dir = "D3"
         train_fine, train_coarse, train_both, test_fine, test_coarse, test_both, loss_h, _ = results
-        plot.plot_accuracy(train_fine, test_fine, f"{config.name}_fine", dir)
-        plot.plot_accuracy(train_coarse, test_coarse, f"{config.name}_coarse", dir)
-        plot.plot_loss(loss_h, config.name, dir)
+        # plot.plot_accuracy(train_fine, test_fine, f"{config.name}_fine", dir)
+        # plot.plot_accuracy(train_coarse, test_coarse, f"{config.name}_coarse", dir)
+        # plot.plot_loss(loss_h, config.name, dir)
         # plot.plot_confusion_matrix(model, data.test_dataloader, device, config.name, "fine", dir)
 
         save_summary(config, results, top5_fine, top5_coarse, top3_fine, top3_coarse)

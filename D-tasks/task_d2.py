@@ -303,7 +303,7 @@ RUNS = [
 ]
 
 if __name__ == "__main__":
-    import plot
+    # import plot
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device: {device}")
@@ -329,9 +329,9 @@ if __name__ == "__main__":
         _, _, top3_acc, top5_acc= evaluate_model(model, data.test_dataloader, device)
 
         dir = "D2"
-        plot.plot_accuracy(train_acc, test_acc, config.name, dir)
-        plot.plot_loss(loss_history, config.name, dir)
-        plot.plot_confusion_matrix(model, data.test_dataloader, device, config.name, "coarse", dir)
+        # plot.plot_accuracy(train_acc, test_acc, config.name, dir)
+        # plot.plot_loss(loss_history, config.name, dir)
+        # plot.plot_confusion_matrix(model, data.test_dataloader, device, config.name, "coarse", dir)
 
         save_summary(config, train_acc, test_acc, loss_history, lr_history, top3_acc, top5_acc)
 

@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
+import seaborn as sns
 
 from sklearn.metrics import confusion_matrix
 import numpy as np
@@ -9,6 +10,9 @@ import os
 
 import json
 import glob
+
+import pandas as pd
+from pandas.plotting import parallel_coordinates
 
 
 def plot_accuracy(train_acc, test_acc, run_name, dir):
@@ -181,5 +185,321 @@ def plot_d4(metric_type: str):
     plt.show()
 
 
+def plot_ds():
+    TASK = "D1"
+
+    INPUT_DIR = TASK
+    OUTPUT_DIR = os.path.join("plots", TASK)
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # -------------------------
+    # Load JSON files
+    # -------------------------
+
+    files = glob.glob(os.path.join(INPUT_DIR, "**/*.json"), recursive=True)
+
+    runs = []
+    for f in files:
+        with open(f) as fp:
+            runs.append(json.load(fp))
+
+    df = pd.DataFrame(runs)
+
+    print(f"Loaded {len(df)} runs for {TASK}")
+
+    # -------------------------
+    # Handle dropout lists
+    # -------------------------
+
+    def extract_dropout(d):
+        if isinstance(d, list):
+            return sum(d) / len(d)
+        return d
+
+    if "dropout" in df.columns:
+        df["dropout_mean"] = df["dropout"].apply(extract_dropout)
+
+    # -------------------------
+    # Determine accuracy column
+    # -------------------------
+
+    if TASK in ["D1", "D2"]:
+        acc_col = "best_test_acc"
+        gap_col = "best_gap"
+    else:
+        acc_col = "best_avg_acc"
+        gap_col = "fine_gap_at_best"
+
+    # -------------------------
+    # 1 Leaderboard Plot
+    # -------------------------
+    top = df.sort_values(acc_col, ascending=False)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    top_train = top["best_test_acc"] + top["best_gap"]
+    ax.barh(top["run"], top_train, label="Best Train Acc", color="steelblue", alpha=0.75)
+
+    ax.barh(top["run"], top["best_test_acc"], label="Best Test Acc", color="mediumslateblue", alpha=0.85)
+
+    ax.set_xlabel("Accuracy")
+    ax.set_title("Best Train and Test Accuracy D1")
+    ax.invert_yaxis()
+    ax.legend()
+
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/leaderboard.png")
+    plt.close()
+
+    # -------------------------
+    # Accuracy vs Gap (Model selection)
+    # -------------------------
+    if gap_col in df.columns:
+        from adjustText import adjust_text
+
+        fig, ax = plt.subplots(figsize=(10, 7))
+
+        # Color points by accuracy
+        scatter = ax.scatter(df[gap_col], df[acc_col], c=df[acc_col], cmap="RdYlGn", s=80, edgecolors="grey", linewidths=0.5, zorder=3)
+        fig.colorbar(scatter, ax=ax, label="Accuracy")
+
+        # Shade the "sweet spot": high acc, low gap
+        ax.axvline(df[gap_col].median(), color="grey", linestyle="--", linewidth=0.8, alpha=0.6)
+        ax.axhline(df[acc_col].median(), color="grey", linestyle="--", linewidth=0.8, alpha=0.6)
+        ax.fill_between([df[gap_col].min(), df[gap_col].median()], df[acc_col].median(), df[acc_col].max() * 1.01, alpha=0.07, color="green", label="Sweet spot")
+
+        # Label only top 5 by accuracy, with adjustText to avoid overlap
+        top = df.sort_values(acc_col, ascending=False).head(5)
+        # print(top)
+        # print(df.loc[df["run"] == "rbest2"])
+        # top = pd.concat([top, df.loc[df["run"] == "rbest3"]])
+        texts = [ax.text(row[gap_col], row[acc_col], row["run"], fontsize=8) for _, row in top.iterrows()]
+        adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle="-", color="black", lw=0.5))
+
+        ax.set_xlabel("Generalization Gap (Train − Test Acc)")
+        ax.set_ylabel("Test Accuracy")
+        ax.set_title("D1 Accuracy vs Overfitting - Model Selection")
+        ax.legend()
+
+        plt.tight_layout()
+        plt.savefig(f"{OUTPUT_DIR}/accuracy_vs_gap.png", dpi=150)
+        plt.close()
+    # -------------------------
+    # Correlation Heatmap
+    # -------------------------
+    keep_cols = ["lr", "weight_decay", "label_smoothing", "batch_size", "dropout_mean", "best_test_acc", "best_gap", "top5_acc", "top3_acc", "min_loss"]
+
+    corr_df = df[[c for c in keep_cols if c in df.columns]].copy()
+    corr_df = corr_df.loc[:, corr_df.nunique() > 1]
+    corr_df = corr_df.dropna(axis=1, thresh=int(len(corr_df) * 0.5))
+
+    corr = corr_df.corr()
+
+    plt.figure(figsize=(9, 7))
+    plt.imshow(corr, interpolation="nearest", aspect="auto")
+    plt.colorbar()
+
+    plt.xticks(range(len(corr.columns)), corr.columns, rotation=45, ha="right")
+    plt.yticks(range(len(corr.columns)), corr.columns)
+
+    plt.title("D1 Metric Correlation Heatmap")
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/correlation_heatmap.png")
+    plt.close()
+
+def plot_ds3():
+    TASK = "D3"
+
+    INPUT_DIR = TASK
+    OUTPUT_DIR = os.path.join("plots", TASK)
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # -------------------------
+    # Load JSON files
+    # -------------------------
+
+    files = glob.glob(os.path.join(INPUT_DIR, "**/*.json"), recursive=True)
+
+    runs = []
+    for f in files:
+        with open(f) as fp:
+            runs.append(json.load(fp))
+
+    df = pd.DataFrame(runs)
+
+    print(f"Loaded {len(df)} runs for {TASK}")
+
+    # -------------------------
+    # Handle dropout lists
+    # -------------------------
+
+    def extract_dropout(d):
+        if isinstance(d, list):
+            return sum(d) / len(d)
+        return d
+
+    if "dropout" in df.columns:
+        df["dropout_mean"] = df["dropout"].apply(extract_dropout)
+
+    # -------------------------
+    # Determine accuracy column
+    # -------------------------
+
+    if TASK in ["D1", "D2"]:
+        acc_col = "best_test_acc"
+        gap_col = "best_gap"
+    else:
+        acc_col = "best_avg_acc"
+        gap_col = "fine_gap_at_best"
+
+    # -------------------------
+    # 1 Leaderboard Plot
+    # -------------------------
+    top = df.sort_values(acc_col, ascending=False)
+
+    metrics = [
+        {
+            "label": "Fine-Grained",
+            "test_col": "best_fine_acc",
+            "gap_col": "fine_gap_at_best",
+            "test_color": "mediumslateblue",
+            "train_color": "plum",
+        },
+        {
+            "label": "Coarse-Grained",
+            "test_col": "best_coarse_acc",
+            "gap_col": "coarse_gap_at_best",
+            "test_color": "steelblue",
+            "train_color": "lightskyblue",
+        },
+        {
+            "label": "Exact Match (Both)",
+            "test_col": "best_both_acc",
+            "gap_col": None,
+            "test_color": "seagreen",
+            "train_color": None,
+        },
+        {
+            "label": "Average Acc",
+            "test_col": "best_avg_acc",
+            "gap_col": None,
+            "test_color": "tomato",
+            "train_color": None,
+        },
+    ]
+
+    fig, axes = plt.subplots(1, 4, figsize=(22, 6), sharey=True)
+
+    for ax, m in zip(axes, metrics):
+
+        test_col = m["test_col"]
+        gap_col  = m["gap_col"]
+
+        if test_col not in top.columns:
+            ax.set_visible(False)
+            continue
+
+        # Draw train bar first (longer, sits behind)
+        if gap_col and gap_col in top.columns:
+            train_acc = top[test_col] + top[gap_col]
+            ax.barh(top["run"], train_acc,
+                    label="Train Acc", color=m["train_color"], alpha=0.85)
+
+        # Draw test bar on top (shorter, overlaps)
+        ax.barh(top["run"], top[test_col],
+                label="Test Acc", color=m["test_color"], alpha=0.9)
+
+        ax.set_xlabel("Accuracy")
+        ax.set_title(m["label"])
+        ax.legend(fontsize=8)
+        ax.invert_yaxis()
+
+    fig.suptitle("D3 - Train vs Test Accuracy", fontsize=13, y=1.02)
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/leaderboard.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+    # -------------------------
+    # Accuracy vs Gap (Model selection)
+    # -------------------------
+    fine_gap   = "fine_gap_at_best"
+    coarse_gap = "coarse_gap_at_best"
+
+    if fine_gap in df.columns or coarse_gap in df.columns:
+        from adjustText import adjust_text
+
+        fig, ax = plt.subplots(figsize=(10, 7))
+
+        for gap, acc, label, cmap, marker in [
+            (fine_gap,   "best_fine_acc",   "Fine-Grained",   "RdYlGn", "o"),
+            (coarse_gap, "best_coarse_acc", "Coarse-Grained", "RdYlBu", "^"),
+        ]:
+            if gap not in df.columns or acc not in df.columns:
+                continue
+
+            scatter = ax.scatter(
+                df[gap], df[acc],
+                c=df[acc], cmap=cmap,
+                s=80, edgecolors="grey", linewidths=0.5,
+                zorder=3, marker=marker, label=label, alpha=0.85
+            )
+            fig.colorbar(scatter, ax=ax, label=f"{label} Accuracy", shrink=0.6)
+
+            # Median crosshairs per series
+            ax.axvline(df[gap].median(), color="grey", linestyle="--", linewidth=0.8, alpha=0.4)
+            ax.axhline(df[acc].median(), color="grey", linestyle="--", linewidth=0.8, alpha=0.4)
+
+            # Sweet spot shading
+            ax.fill_between(
+                [df[gap].min(), df[gap].median()],
+                df[acc].median(), df[acc].max() * 1.01,
+                alpha=0.05, color="green"
+            )
+
+            # Label top 5 per series
+            top = df.sort_values(acc, ascending=False).head(5)
+            texts = [
+                ax.text(row[gap], row[acc], row["run"], fontsize=7)
+                for _, row in top.iterrows()
+            ]
+            adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle="-", color="black", lw=0.5))
+
+        # Single sweet spot legend entry
+        ax.fill_between([], [], [], alpha=0.1, color="green", label="Sweet spot")
+
+        ax.set_xlabel("Generalization Gap (Train − Test Acc)")
+        ax.set_ylabel("Test Accuracy")
+        ax.set_title("D3 Accuracy vs Overfitting - Model Selection")
+        ax.legend()
+        plt.tight_layout()
+        plt.savefig(f"{OUTPUT_DIR}/accuracy_vs_gap.png", dpi=150)
+        plt.close()
+    # -------------------------
+    # Correlation Heatmap
+    # -------------------------
+    keep_cols = ["lr", "weight_decay", "label_smoothing", "batch_size", "dropout_mean", "best_fine_acc", "best_coarse_acc", "best_avg_acc", "best_gap", "top5_coarse_acc", "top3_fine_acc", "top5_fine_acc", "top3_fine_acc", "min_loss"]
+
+    corr_df = df[[c for c in keep_cols if c in df.columns]].copy()
+    corr_df = corr_df.loc[:, corr_df.nunique() > 1]
+    corr_df = corr_df.dropna(axis=1, thresh=int(len(corr_df) * 0.5))
+
+    corr = corr_df.corr()
+
+    plt.figure(figsize=(9, 7))
+    plt.imshow(corr, interpolation="nearest", aspect="auto")
+    plt.colorbar()
+
+    plt.xticks(range(len(corr.columns)), corr.columns, rotation=45, ha="right")
+    plt.yticks(range(len(corr.columns)), corr.columns)
+
+    plt.title("D3 Metric Correlation Heatmap")
+    plt.tight_layout()
+    plt.savefig(f"{OUTPUT_DIR}/correlation_heatmap.png")
+    plt.close()
+
 if __name__ == "__main__":
-    plot_d4("distance")
+    # plot_d4("distance")
+    plot_ds()
+    # plot_ds3()

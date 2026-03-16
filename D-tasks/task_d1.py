@@ -310,7 +310,7 @@ RUNS = [
     # RunConfig(name="r20_small", model_type="small", dropout=0.5, optim_type="adam", lr=1e-3, weight_decay=1e-3, scheduler_type="cosine", label_smoothing=0.1, batch_size=32, note="small: 576->512->100"),
 ]
 if __name__ == "__main__":
-    import plot
+    # import plot
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device: {device}")
@@ -336,8 +336,8 @@ if __name__ == "__main__":
         _, _, top5_acc, top3_acc = evaluate_model(model, data.test_dataloader, device)
 
         dir = "D1"
-        plot.plot_accuracy(train_acc, test_acc, config.name, dir)
-        plot.plot_loss(loss_history, config.name, dir)
-        plot.plot_confusion_matrix(model, data.test_dataloader, device, config.name, "fine", dir)
+        # plot.plot_accuracy(train_acc, test_acc, config.name, dir)
+        # plot.plot_loss(loss_history, config.name, dir)
+        # plot.plot_confusion_matrix(model, data.test_dataloader, device, config.name, "fine", dir)
 
         save_summary(config, train_acc, test_acc, loss_history, lr_history, top5_acc, top3_acc)
