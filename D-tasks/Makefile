@@ -1,21 +1,23 @@
+PYTHON := $(shell if command -v uv >/dev/null 2>&1; then echo "uv run python3"; else echo "python3"; fi)
+
 d1: 
-	uv run python3 task_d1.py
+	$(PYTHON) task_d1.py
 
 d2:
-	uv run python3 task_d2.py
+	$(PYTHON) task_d2.py
 
 d3:
-	uv run python3 task_d3.py
+	$(PYTHON) task_d3.py
 
 d4:
-	uv run python3 task_d4.py
+	$(PYTHON) task_d4.py
 
 d5:
-	uv run python3 task_d5.py
+	$(PYTHON) task_d5.py
 
 d6:
-	uv run python3 task_d6.py
+	$(PYTHON) task_d6.py
 
 d7:
-	uv run python3 task_d7.py
+	$(PYTHON) task_d7.py
 
