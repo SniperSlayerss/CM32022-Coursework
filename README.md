@@ -1,4 +1,4 @@
-# CM32022 Coursework
+# CM32022 Coursework - Group C
 
 Repository is managed via `uv`, dependencies are listed in `pyproject.toml` and in `requirements.txt`
 
