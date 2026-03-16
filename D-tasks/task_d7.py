@@ -1,6 +1,3 @@
-import os
-
-import numpy as np
 import task_d1
 import task_d2
 import torch
@@ -73,9 +70,9 @@ if __name__ == "__main__":
     d1_results = run_knn(d1_model, data, device)
     print("Finished D1 k-NN!")
 
-    print("Starting D2 k-NN...")
+    print("Starting D2...")
     d2_model = task_d2.prepare_test().to(device)
-    d2_acc, _, _ = task_d2.evaluate_model(d2_model, data.test_dataloader, device)
+    d2_acc, _, _, _ = task_d2.evaluate_model(d2_model, data.test_dataloader, device)
     print(f"D2 accuracy: {d2_acc * 100:.2f}%")
 
-    print("Finished D2 k-NN!")
+    print("Finished D2!")

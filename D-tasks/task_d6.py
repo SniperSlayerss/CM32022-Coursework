@@ -150,9 +150,7 @@ def main():
     d2_model = task_d2.prepare_test()
     d2_model.to(device)
 
-    d2_emb, d2_coarse_labels, d2_images = extract_embeddings(
-        d2_model.backbone, data.test_dataloader, device
-    )
+    d2_emb, d2_coarse_labels, d2_images = extract_embeddings(d2_model.backbone, data.test_dataloader, device)
 
     d2_proj = TSNE(n_components=2, random_state=42, perplexity=30).fit_transform(d2_emb)
 
@@ -172,32 +170,31 @@ def main():
     )
     print("Finished D2 t-SNE!")
 
-    print("Starting D4 t-SNE...")
-    d4_model = task_d4.prepare_test(margin=0.5, fine_labels=False)
-    d4_model.to(device)
+    for margin in [0.3, 0.5, 1.0]:
+        print(f"Starting D4 t-SNE (margin={margin})...")
+        d4_model = task_d4.prepare_test(margin=margin, fine_labels=False)
+        d4_model.to(device)
 
-    d4_emb, d4_coarse_labels, d4_images = extract_embeddings(
-        d4_model, data.test_dataloader, device
-    )
+        d4_emb, d4_coarse_labels, d4_images = extract_embeddings(d4_model, data.test_dataloader, device)
 
-    d4_proj = TSNE(n_components=2, random_state=42, perplexity=30).fit_transform(d4_emb)
+        d4_proj = TSNE(n_components=2, random_state=42, perplexity=30).fit_transform(d4_emb)
 
-    plot_tsne(
-        d4_proj,
-        d4_coarse_labels,
-        title="t-SNE of D4 model embeddings",
-        save_path="./output/d6_tsne_d4_m=0.5_coarse.png",
-    )
+        plot_tsne(
+            d4_proj,
+            d4_coarse_labels,
+            title=f"t-SNE of D4 model embeddings (margin={margin})",
+            save_path=f"./output/d6_tsne_d4_m={margin}_coarse.png",
+        )
 
-    plot_tsne_images(
-        d4_proj,
-        d4_images,
-        d4_coarse_labels,
-        title="t-SNE of D4 model embeddings (images)",
-        save_path="./output/d6_tsne_d4_m=0.5_coarse_images.png",
-    )
+        plot_tsne_images(
+            d4_proj,
+            d4_images,
+            d4_coarse_labels,
+            title=f"t-SNE of D4 model embeddings (margin={margin}, images)",
+            save_path=f"./output/d6_tsne_d4_m={margin}_coarse_images.png",
+        )
 
-    print("Starting D4 t-SNE!")
+        print(f"Finished D4 t-SNE (margin={margin})!")
 
 
 if __name__ == "__main__":
