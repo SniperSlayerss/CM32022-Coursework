@@ -11,6 +11,17 @@ These commands assume you are inside the `C-tasks` directory
 
 >  Requires `opencv-python`
 
+
+### Task C1
+```sh
+make c1
+```
+
+### Task C2
+```sh
+make c2
+```
+
 ### Task C3
 ```sh
 make c3
