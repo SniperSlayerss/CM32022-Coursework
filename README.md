@@ -1,5 +1,7 @@
 # CM32022 Coursework
 
+Repository is managed via `uv`, dependencies are listed in `pyproject.toml` and in `requirements.txt`
+
 ## C Tasks
 
 These commands assume you are inside the `C-tasks` directory
