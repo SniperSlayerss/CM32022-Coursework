@@ -61,7 +61,7 @@ def d7_check():
     print('D7 check passed')
 
 if __name__ == '__main__':
-    margins = (0.2, 0.5, 1.0)  # TODO adjust to a value for which you have stored the fine and coarse models for task D4
+    margins = (0.3, 0.5, 1.0, 1.5)  # TODO adjust to a value for which you have stored the fine and coarse models for task D4
     d1_check()
     d2_check()
     d3_check()
